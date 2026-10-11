@@ -1,13 +1,18 @@
 name: Linux build
 
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
+    inputs:
+      test-filter:
+        description: "Optional mocha --grep pattern; empty runs the full suite"
+        required: false
+        default: ""
 
 jobs:
   build:
     name: Node ${{ matrix.node-version }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     strategy:
       matrix:
@@ -28,5 +33,25 @@ jobs:
           npm install
 
       - name: Run Tests
+        shell: bash
         run: |
-          npm test
+          if [ -n "${{ inputs.test-filter }}" ]; then
+            npm test -- --no-colors --grep "${{ inputs.test-filter }}"
+          else
+            npm test -- --no-colors
+          fi
+
+      - name: Pack
+        if: matrix.node-version == '20.x'
+        run: |
+          npm i -g npm@10.8.2
+          mkdir -p dist
+          npm pack --pack-destination dist
+
+      - name: Upload package
+        if: matrix.node-version == '20.x'
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: dist/*.tgz
+          if-no-files-found: error
